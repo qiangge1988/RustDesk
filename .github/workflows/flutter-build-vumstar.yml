@@ -223,7 +223,7 @@ jobs:
         uses: actions/download-artifact@master
         if: ${{ inputs.upload-artifact }}
         with:
-          name: topmostwindow-artifacts
+          name: ${{ matrix.job.arch == 'aarch64' && 'topmostwindow-artifacts-ARM64' || 'topmostwindow-artifacts-x64' }}
           path: "./rustdesk"
 
       - name: Upload unsigned
@@ -1382,9 +1382,19 @@ jobs:
           vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
           doNotCache: false
 
+      - name: Install CMake for vcpkg
+        if: matrix.job.arch == 'x86_64' || env.UPLOAD_ARTIFACT == 'true'
+        run: |
+          # vcpkg (baseline 9e593bb) uses string(JSON ... STRING_ENCODE) which needs CMake >= 4.3,
+          # while the runner ships CMake 3.22 -> "invalid mode 'STRING_ENCODE'"
+          curl -fsSL -o /tmp/cmake.tar.gz "https://github.com/Kitware/CMake/releases/download/v4.4.0/cmake-4.4.0-linux-${{ matrix.job.arch }}.tar.gz"
+          sudo tar -xzf /tmp/cmake.tar.gz -C /opt
+          /opt/cmake-4.4.0-linux-${{ matrix.job.arch }}/bin/cmake --version
+
       - name: Install vcpkg dependencies
         if: matrix.job.arch == 'x86_64' || env.UPLOAD_ARTIFACT == 'true'
         run: |
+          export PATH="/opt/cmake-4.4.0-linux-${{ matrix.job.arch }}/bin:$PATH"
           sudo apt install -y libva-dev && apt show libva-dev
           if ! $VCPKG_ROOT/vcpkg \
             install \
