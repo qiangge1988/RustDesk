@@ -721,6 +721,39 @@ jobs:
           fi
           ./build.py --flutter --hwcodec --unix-file-copy-paste ${{ matrix.job.extra-build-args }}
 
+      - name: Ad-hoc codesign app (no Developer ID)
+        if: env.UPLOAD_ARTIFACT == 'true' && env.MACOS_P12_BASE64 == null
+        run: |
+          # 没有 Developer ID 证书时，Xcode 默认产出 ad-hoc 签名的 app：主程序带 hardened runtime，
+          # 而嵌入的 Flutter/plugin framework 不带。macOS 26+ 的 library validation 会以
+          # "different Team IDs" 拒绝加载，表现为双击闪退：
+          #   Library not loaded: @rpath/FlutterMacOS.framework/Versions/A/FlutterMacOS
+          # 解决：整个 bundle 用同一 ad-hoc 身份重签，并放开库校验（仅用于无证书的未签名发行版）。
+          cat > /tmp/rd-entitlements.plist <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>com.apple.security.app-sandbox</key>
+            <false/>
+            <key>com.apple.security.cs.allow-jit</key>
+            <true/>
+            <key>com.apple.security.cs.disable-library-validation</key>
+            <true/>
+            <key>com.apple.security.device.audio-input</key>
+            <true/>
+            <key>com.apple.security.network.client</key>
+            <true/>
+          </dict>
+          </plist>
+          PLIST
+          APP=./flutter/build/macos/Build/Products/Release/RustDesk.app
+          codesign --force --deep --sign - --options runtime --entitlements /tmp/rd-entitlements.plist "$APP"
+          codesign --verify --deep --strict "$APP"
+          codesign -d --entitlements :- "$APP" || true
+          # 去掉隔离属性，避免用户从 dmg 拖出后仍被 quarantine 拦截
+          xattr -cr "$APP" || true
+
       - name: create unsigned dmg
         if: env.UPLOAD_ARTIFACT == 'true'
         run: |
