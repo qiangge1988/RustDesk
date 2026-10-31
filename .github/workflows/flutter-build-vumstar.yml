@@ -1891,6 +1891,9 @@ jobs:
           sudo apt-get install -y libarchive-tools libfuse2
           # set-up appimage-builder
           # https://github.com/AppImage/AppImageKit/issues/1395
+          # ubuntu-22.04 ships setuptools 59, too old for setuptools_scm 10
+          # ("AttributeError: ignore_egg_info_in_manifest"), so upgrade it first
+          sudo pip3 install -U pip "setuptools==69.5.1" wheel
           sudo pip3 install git+https://github.com/rustdesk-org/appimage-builder.git
           # run appimage-builder
           pushd appimage
